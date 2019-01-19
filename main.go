@@ -10,5 +10,14 @@ func main() {
 	//b.PrintVar()
 
 	// Write content to file
-	b.WriteToFile("test.txt", "Hello World")
+	//b.WriteToFile("test.txt", "Hello World")
+
+	// Input from stdio
+	//b.Input()
+
+	// Read input from sdtio
+	//b.Scan()
+
+	// Interface
+	b.FunctionWithInterface()
 }
