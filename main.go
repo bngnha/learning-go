@@ -1,11 +1,16 @@
 package main
 
 import (
+	"fmt"
+
+	a "github.com/bngnha/learn-golang/advanced"
 	b "github.com/bngnha/learn-golang/beginner"
 )
 
 func main() {
-	//b.Hello()
+	//====BEGINNER====
+	b.Hello()
+	fmt.Println("===============")
 
 	//b.PrintVar()
 
@@ -18,6 +23,19 @@ func main() {
 	// Read input from sdtio
 	//b.Scan()
 
+	// Array
+	//b.WorkWithArray()
+
 	// Interface
-	b.FunctionWithInterface()
+	//b.FunctionWithInterface()
+
+	// Work with http
+	//b.WorkWithHttp()
+
+	//====ADVANCED====
+	//a.WorkWithPointer()
+
+	//a.PlayWithVarDic()
+	//a.PlayWithCallback()
+	a.PlayWithClosure()
 }
