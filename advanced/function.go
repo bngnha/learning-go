@@ -19,7 +19,7 @@ func PlayWithCallback() {
 
 func PlayWithClosure() {
 	timeSince := initTimeSeq()
-	fmt.Println(timeSince)
+	fmt.Println(timeSince())
 
 	time.Sleep(1 * time.Second)
 	fmt.Println(timeSince())

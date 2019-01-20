@@ -37,5 +37,7 @@ func main() {
 
 	//a.PlayWithVarDic()
 	//a.PlayWithCallback()
-	a.PlayWithClosure()
+	//a.PlayWithClosure()
+
+	a.PlayWithOOPBasic()
 }
