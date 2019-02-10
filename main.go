@@ -2,14 +2,16 @@ package main
 
 import (
 	"fmt"
+	//"os"
 
-	a "github.com/bngnha/learn-golang/advanced"
-	b "github.com/bngnha/learn-golang/beginner"
+	//a "github.com/bngnha/learn-golang/advanced"
+	//b "github.com/bngnha/learn-golang/beginner"
+	c "github.com/bngnha/learn-golang/crawler"
 )
 
 func main() {
 	//====BEGINNER====
-	b.Hello()
+	//b.Hello()
 	fmt.Println("===============")
 
 	//b.PrintVar()
@@ -39,5 +41,19 @@ func main() {
 	//a.PlayWithCallback()
 	//a.PlayWithClosure()
 
-	a.PlayWithOOPBasic()
+	//a.PlayWithOOPBasic()
+
+	//====CRAWLER====
+	/*
+		if len(os.Args) > 0 {
+			if os.Args[1] == "tag" {
+				c.GetTags()
+			} else if os.Args[1] == "quote" {
+				c.GetQuotes()
+			} else if os.Args[1] == "image" {
+				c.DownloadImages()
+			}
+		}
+	*/
+	c.GetQuotes()
 }
