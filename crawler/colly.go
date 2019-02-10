@@ -10,27 +10,29 @@ import (
 )
 
 var (
-	quoteString   string         = "https://www.goodreads.com/quotes"
-	contentRegexp *regexp.Regexp = regexp.MustCompile("“(.+?)”")
+	quoteString   = "https://www.goodreads.com/quotes?page=92"
+	contentRegexp = regexp.MustCompile("“(.+?)”")
 )
 
-type Quote struct {
-	Content string
-	Author  string
-	Tags    []string
-	LikeNo  int
+type quote struct {
+	Content     string
+	Author      string
+	AuthorImage string
+	Tags        []string
+	LikeNo      int
 }
 
-func (q *Quote) String() string {
-	return fmt.Sprintf("%s ― %s\n Tags: %v \t Like: %s\n\n", q.Content, q.Author, q.Tags, strconv.Itoa(q.LikeNo))
+func (q *quote) String() string {
+	return fmt.Sprintf("%s ― %s\n Tags: %v \t Like: %s\n %s\n\n", q.Content, q.Author, q.Tags, strconv.Itoa(q.LikeNo), q.AuthorImage)
 }
 
+// GetQuotes function
 func GetQuotes() {
 	c := colly.NewCollector(
 		//colly.Debugger(&debug.LogDebugger{}),
 		colly.AllowedDomains("www.goodreads.com"),
 	)
-	var quotes []Quote
+	var quotes []quote
 
 	c.OnHTML(".quoteDetails", func(e *colly.HTMLElement) {
 		res := contentRegexp.FindAllStringSubmatch(e.ChildText("div.quoteText"), -1)
@@ -43,12 +45,7 @@ func GetQuotes() {
 			return
 		}
 
-		likeNoStrs := strings.Split(e.ChildText("a.smallText"), " ")
-		likeNo, err := strconv.Atoi(likeNoStrs[0])
-		if err != nil {
-			return
-		}
-
+		// tag
 		tags := []string{}
 		tagStr := e.ChildText("div.smallText")
 		if tagStr != "" {
@@ -60,15 +57,30 @@ func GetQuotes() {
 			}
 		}
 
-		quote := Quote{
-			Content: res[0][0],
-			Author:  e.ChildText(".authorOrTitle"),
-			Tags:    tags,
-			LikeNo:  likeNo,
+		// liked number
+		likeNoStrs := strings.Split(e.ChildText("a.smallText"), " ")
+		likeNo, err := strconv.Atoi(likeNoStrs[0])
+		if err != nil {
+			likeNo = 0
 		}
-		fmt.Print(quote.String())
 
-		quotes = append(quotes, quote)
+		//author image
+		// authorImageLink, exist := e.DOM.Find("a.leftAlignedImage > img").Attr("src")
+		// if !exist {
+		// 	authorImageLink = ""
+		// }
+		authorImageLink := e.ChildAttr("a.leftAlignedImage > img", "src")
+
+		q := quote{
+			Content:     res[0][0],
+			Author:      e.ChildText(".authorOrTitle"),
+			AuthorImage: authorImageLink,
+			Tags:        tags,
+			LikeNo:      likeNo,
+		}
+		fmt.Print(q.String())
+
+		quotes = append(quotes, q)
 	})
 
 	// next page
@@ -79,10 +91,11 @@ func GetQuotes() {
 		}
 	})
 
-	fmt.Println("Launching Scraper !\n\n")
+	fmt.Println("Launching Scraper !")
 	c.Visit(quoteString)
 }
 
+// DownloadImages function
 func DownloadImages() {
 
 }
