@@ -56,4 +56,6 @@ func main() {
 		}
 	*/
 	c.GetQuotes()
+	//c.Shopify()
+	//c.CoinMarketCap()
 }
