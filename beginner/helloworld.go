@@ -1,5 +1,9 @@
-package beginner
+package main
 
-func Hello() {
+func hello() {
 	print("Hello World\n")
+}
+
+func main() {
+	hello()
 }

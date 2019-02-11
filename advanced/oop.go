@@ -1,11 +1,11 @@
-package advanced
+package main
 
 import (
 	"fmt"
 	"math"
 )
 
-func PlayWithOOPBasic() {
+func playWithOOPBasic() {
 	r := rectangle{width: 2, height: 3}
 	s := square{length: 3}
 	c := circle{radius: 4}
@@ -75,4 +75,8 @@ func (c circle) volume() float64 {
 
 func geocalc(g geo) {
 	fmt.Printf("%#v\t%#v\t%#v\t%#v\n", g, g.area(), g.extent(), g.volume())
+}
+
+func main() {
+	playWithOOPBasic()
 }

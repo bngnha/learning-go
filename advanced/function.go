@@ -1,23 +1,23 @@
-package advanced
+package main
 
 import (
 	"fmt"
 	"time"
 )
 
-func PlayWithVarDic() {
+func playWithVarDic() {
 	fmt.Println(sum(2, 3, 5, 7, 11, 13, 17, 19, 23, 29))
 	numbers := []int{31, 37, 41, 43, 47, 53, 59}
 	fmt.Println(sum(numbers...))
 }
 
-func PlayWithCallback() {
+func playWithCallback() {
 	fmt.Printf("%v\n", timesTwo(func(i int) int {
 		return i * 2
 	}, 32))
 }
 
-func PlayWithClosure() {
+func playWithClosure() {
 	timeSince := initTimeSeq()
 	fmt.Println(timeSince())
 
@@ -49,4 +49,10 @@ func initTimeSeq() func() int {
 	return func() int {
 		return int(time.Now().UnixNano() - t)
 	}
+}
+
+func main() {
+	playWithVarDic()
+	playWithCallback()
+	playWithClosure()
 }

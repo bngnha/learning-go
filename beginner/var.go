@@ -1,4 +1,4 @@
-package beginner
+package main
 
 import (
 	"fmt"
@@ -6,8 +6,12 @@ import (
 
 var variable string
 
-func PrintVar() {
+func printVar() {
 	variable = "Testing..."
 
 	fmt.Println(variable)
+}
+
+func main() {
+	printVar()
 }

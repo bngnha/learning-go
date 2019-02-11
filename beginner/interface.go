@@ -1,8 +1,8 @@
-package beginner
+package main
 
 import "fmt"
 
-func FunctionWithInterface() {
+func functionWithInterface() {
 	var myInterface = [3]interface{}{}
 
 	myInterface[0] = 23
@@ -28,4 +28,8 @@ func printInterfaceData(myInterface interface{}) {
 	}
 
 	fmt.Printf("Data: %#v\n", myInterface)
+}
+
+func main() {
+	functionWithInterface()
 }

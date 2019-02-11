@@ -1,8 +1,8 @@
-package advanced
+package main
 
 import "fmt"
 
-func WorkWithPointer() {
+func workWithPointer() {
 	var value int
 	value = 5
 
@@ -18,4 +18,8 @@ func WorkWithPointer() {
 
 func plusOne(in *int) {
 	*in++
+}
+
+func main() {
+	workWithPointer()
 }

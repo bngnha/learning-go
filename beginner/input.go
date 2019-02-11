@@ -1,4 +1,4 @@
-package beginner
+package main
 
 import (
 	"bufio"
@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-func Input() {
+func inputFunc() {
 	if 1 < len(os.Args) {
 		fmt.Print(len(os.Args) - 1)
 		fmt.Println("Arguments provided")
@@ -22,4 +22,8 @@ func Input() {
 			fmt.Println(char)
 		}
 	}
+}
+
+func main() {
+	inputFunc()
 }

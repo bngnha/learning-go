@@ -1,11 +1,11 @@
-package beginner
+package main
 
 import (
 	"os"
 )
 
 // Write your content to file
-func WriteToFile(path string, content string) {
+func writeToFile(path string, content string) {
 	fp := createFile(path)
 
 	fp.WriteString(content)
@@ -30,4 +30,8 @@ func createFile(path string) *os.File {
 	}
 
 	return fp
+}
+
+func main() {
+	writeToFile()
 }

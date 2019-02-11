@@ -1,4 +1,4 @@
-package beginner
+package main
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"os"
 )
 
-func WorkWithHttp() {
+func workWithHttp() {
 	response, err := http.Get("http://golang.org/")
 	if err != nil {
 		fmt.Printf("%s", err)
@@ -21,4 +21,8 @@ func WorkWithHttp() {
 		}
 		fmt.Printf("%s\n", string(contents))
 	}
+}
+
+func main() {
+	workWithHttp()
 }

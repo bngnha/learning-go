@@ -1,4 +1,4 @@
-package beginner
+package main
 
 import "fmt"
 
@@ -7,7 +7,7 @@ var intArray = []int{1, 2, 3, 5, 8}
 var mapOne = map[int]string{}
 var mapTwo = map[string]interface{}{}
 
-func WorkWithArray() {
+func workWithArray() {
 	// do this five times
 	for i := 0; i != 5; i++ {
 
@@ -19,4 +19,8 @@ func WorkWithArray() {
 	}
 	fmt.Println(mapOne)
 	fmt.Println(mapTwo)
+}
+
+func main() {
+	workWithArray()
 }

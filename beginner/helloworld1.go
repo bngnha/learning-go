@@ -1,11 +1,15 @@
-package beginner
+package main
 
 import (
 	"fmt"
 )
 
-func Hello1() {
+func hello1() {
 	var str = "Hello World"
 
 	fmt.Println(str)
+}
+
+func main() {
+	hello1()
 }
