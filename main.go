@@ -4,6 +4,7 @@ import (
 	"fmt"
 	//"os"
 	//c "github.com/bngnha/learn-golang/crawler"
+	"github.com/bngnha/learn-golang/videos"
 )
 
 func main() {
@@ -22,4 +23,5 @@ func main() {
 	//c.GetQuotes()
 	//c.Shopify()
 	//c.CoinMarketCap()
+	videos.DlYt()
 }
