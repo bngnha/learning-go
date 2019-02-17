@@ -18,11 +18,11 @@ var (
 )
 
 type quote struct {
-	Content     string
-	Author      string
-	AuthorImage string
-	Tags        []string
-	LikeNo      int
+	Content     string   `bson:"content"`
+	Author      string   `bson:"author_name"`
+	AuthorImage string   `bson:"author_image"`
+	Tags        []string `bson:"tags"`
+	LikeNo      int      `bson:"liked"`
 }
 
 func (q *quote) String() string {
