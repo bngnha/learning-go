@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	config "github.com/micro/go-config"
 	"github.com/rylio/ytdl"
 	"google.golang.org/api/youtube/v3"
 )
@@ -19,6 +20,11 @@ func DlYt() {
 			fmt.Println(err.Error())
 		}
 	}()
+	// Load json config file
+	config.LoadFile("config.json")
+
+	channels := config.Get("channels")
+	fmt.Printf("%v", channels)
 
 	info, err := ytdl.GetVideoInfo("https://www.youtube.com/watch?v=BzYpUt1PFFI")
 	if err != nil {
