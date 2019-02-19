@@ -75,7 +75,7 @@ func getClient(scope string) *http.Client {
 	// valid one for your OAuth2 credentials.
 	config.RedirectURL = "http://localhost:8090"
 	// Use the following redirect URI if launchWebServer=false in oauth2.go
-	// config.RedirectURL = "urn:ietf:wg:oauth:2.0:oob"
+	//config.RedirectURL = "urn:ietf:wg:oauth:2.0:oob"
 
 	cacheFile, err := tokenCacheFile()
 	if err != nil {
