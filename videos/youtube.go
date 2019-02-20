@@ -12,6 +12,16 @@ import (
 	"google.golang.org/api/youtube/v3"
 )
 
+type Channel struct {
+	Url   string `json:"url"`
+	Title string `json:"title"`
+	Desc  string `json:"desc"`
+}
+
+type Channels struct {
+	Channels []Channel `json:"channels"`
+}
+
 // DlYt function
 func DlYt() {
 	var err error
@@ -20,58 +30,63 @@ func DlYt() {
 			fmt.Println(err.Error())
 		}
 	}()
-	// Load json config file
+
 	config.LoadFile("config.json")
+	var channels Channels
 
-	channels := config.Get("channels")
-	fmt.Printf("%v", channels)
-
-	info, err := ytdl.GetVideoInfo("https://www.youtube.com/watch?v=BzYpUt1PFFI")
-	if err != nil {
-		err = fmt.Errorf("Unable to fetch video info: %s", err.Error())
-		return
-	}
-	formats := info.Formats
-	filters := []string{
-		fmt.Sprintf("%s:mp4", ytdl.FormatExtensionKey),
-		fmt.Sprintf("!%s:", ytdl.FormatVideoEncodingKey),
-		fmt.Sprintf("!%s:", ytdl.FormatAudioEncodingKey),
-		fmt.Sprint("best"),
-	}
-
-	for _, filter := range filters {
-		filter, err := parseFilter(filter)
-		if err == nil {
-			formats = filter(formats)
+	config.Scan(&channels)
+	for _, channel := range channels.Channels {
+		info, err := ytdl.GetVideoInfo(channel.Url)
+		if err != nil {
+			err = fmt.Errorf("Unable to fetch video info: %s", err.Error())
+			return
 		}
-	}
 
-	var fileName string
-	fileName, err = createFileName("testing."+formats[0].Extension, outputFileName{
-		Title:         sanitizeFileNamePart(info.Title),
-		Ext:           sanitizeFileNamePart(formats[0].Extension),
-		DatePublished: sanitizeFileNamePart(info.DatePublished.Format("2006-01-02")),
-		Resolution:    sanitizeFileNamePart(formats[0].Resolution),
-		Author:        sanitizeFileNamePart(info.Author),
-		Duration:      sanitizeFileNamePart(info.Duration.String()),
-	})
-	if err != nil {
-		err = fmt.Errorf("Unable to parse output file file name: %s", err.Error())
-		return
-	}
+		formats := info.Formats
+		filters := []string{
+			fmt.Sprintf("%s:mp4", ytdl.FormatExtensionKey),
+			fmt.Sprintf("!%s:", ytdl.FormatVideoEncodingKey),
+			fmt.Sprintf("!%s:", ytdl.FormatAudioEncodingKey),
+			fmt.Sprint("best"),
+		}
 
-	var file *os.File
-	file, err = os.OpenFile(fileName, os.O_CREATE|os.O_WRONLY, 0666)
-	if err != nil {
-		err = fmt.Errorf("Unable to open output file: %s", err.Error())
-		return
-	}
-	defer file.Close()
+		for _, filter := range filters {
+			filter, err := parseFilter(filter)
+			if err == nil {
+				formats = filter(formats)
+			}
+		}
 
-	err = info.Download(formats[0], file)
-	if err != nil {
-		println(err)
+		fileName, err := createFileName(channel.Title+"."+formats[0].Extension, outputFileName{
+			Title:         sanitizeFileNamePart(info.Title),
+			Ext:           sanitizeFileNamePart(formats[0].Extension),
+			DatePublished: sanitizeFileNamePart(info.DatePublished.Format("2006-01-02")),
+			Resolution:    sanitizeFileNamePart(formats[0].Resolution),
+			Author:        sanitizeFileNamePart(info.Author),
+			Duration:      sanitizeFileNamePart(info.Duration.String()),
+		})
+		if err != nil {
+			err = fmt.Errorf("Unable to parse output file file name: %s", err.Error())
+			return
+		}
+
+		fmt.Println("Downloading " + fileName + "...")
+		go func() {
+			file, err := os.OpenFile(fileName, os.O_CREATE|os.O_WRONLY, 0666)
+			if err != nil {
+				err = fmt.Errorf("Unable to open output file: %s", err.Error())
+				return
+			}
+			defer file.Close()
+
+			err = info.Download(formats[0], file)
+			if err != nil {
+				fmt.Println(err)
+			}
+			fmt.Println(fileName + " downloaded!")
+		}()
 	}
+	fmt.Println("Start download files!")
 }
 
 var (
