@@ -23,6 +23,8 @@ func main() {
 	//c.GetQuotes()
 	//c.Shopify()
 	//c.CoinMarketCap()
-	videos.DlYt()
-	//videos.UlYt()
+	videos.ReupYt()
+
+	fmt.Scanln()
+	fmt.Println("Done")
 }

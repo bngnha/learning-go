@@ -13,17 +13,29 @@ import (
 )
 
 type Channel struct {
-	Url   string `json:"url"`
-	Title string `json:"title"`
-	Desc  string `json:"desc"`
+	Url      string `json:"url"`
+	Title    string `json:"title"`
+	Desc     string `json:"desc"`
+	Category string `json:"category"`
+	Keywords string `json:"keywords"`
+	Privacy  string `json:"privacy"`
 }
 
 type Channels struct {
 	Channels []Channel `json:"channels"`
 }
 
-// DlYt function
-func DlYt() {
+var (
+	filename    = flag.String("filename", "", "Name of video file to upload")
+	title       = flag.String("title", "Test Title", "Video title")
+	description = flag.String("description", "Test Description", "Video description")
+	category    = flag.String("category", "22", "Video category")
+	keywords    = flag.String("keywords", "", "Comma separated list of video keywords")
+	privacy     = flag.String("privacy", "unlisted", "Video privacy status")
+)
+
+// ReupYt function
+func ReupYt() {
 	var err error
 	defer func() {
 		if err != nil {
@@ -35,6 +47,7 @@ func DlYt() {
 	var channels Channels
 
 	config.Scan(&channels)
+	fmt.Println("Start download files!")
 	for _, channel := range channels.Channels {
 		info, err := ytdl.GetVideoInfo(channel.Url)
 		if err != nil {
@@ -71,40 +84,31 @@ func DlYt() {
 		}
 
 		fmt.Println("Downloading " + fileName + "...")
-		go func() {
-			file, err := os.OpenFile(fileName, os.O_CREATE|os.O_WRONLY, 0666)
-			if err != nil {
-				err = fmt.Errorf("Unable to open output file: %s", err.Error())
-				return
-			}
-			defer file.Close()
+		//go func() {
+		file, err := os.OpenFile(fileName, os.O_CREATE|os.O_WRONLY, 0666)
+		if err != nil {
+			err = fmt.Errorf("Unable to open output file: %s", err.Error())
+			return
+		}
+		defer file.Close()
 
-			err = info.Download(formats[0], file)
-			if err != nil {
-				fmt.Println(err)
-			}
-			fmt.Println(fileName + " downloaded!")
-		}()
+		err = info.Download(formats[0], file)
+		if err != nil {
+			fmt.Println(err)
+		}
+		fmt.Println(fileName + " downloaded!")
+		//}()
+
+		upload(fileName, channel.Title, channel.Desc, channel.Category, channel.Keywords, channel.Privacy)
 	}
-	fmt.Println("Start download files!")
 }
 
-var (
-	filename    = flag.String("filename", "", "Name of video file to upload")
-	title       = flag.String("title", "Test Title", "Video title")
-	description = flag.String("description", "Test Description", "Video description")
-	category    = flag.String("category", "22", "Video category")
-	keywords    = flag.String("keywords", "", "Comma separated list of video keywords")
-	privacy     = flag.String("privacy", "unlisted", "Video privacy status")
-)
-
-// UlYt function
-func UlYt() {
+func upload(filename string, title string, desc string, category string, keywords string, privacy string) {
 	flag.Parse()
 
-	//if *filename == "" {
-	//	log.Fatalf("You must provide a filename of a video file to upload")
-	//}
+	if filename == "" {
+		log.Fatalf("You must provide a filename of a video file to upload")
+	}
 
 	client := getClient(youtube.YoutubeUploadScope)
 
@@ -115,24 +119,24 @@ func UlYt() {
 
 	upload := &youtube.Video{
 		Snippet: &youtube.VideoSnippet{
-			Title:       *title,
-			Description: *description,
-			CategoryId:  *category,
+			Title:       title,
+			Description: desc,
+			CategoryId:  category,
 		},
-		Status: &youtube.VideoStatus{PrivacyStatus: *privacy},
+		Status: &youtube.VideoStatus{PrivacyStatus: privacy},
 	}
 
 	// The API returns a 400 Bad Request response if tags is an empty string.
-	if strings.Trim(*keywords, "") != "" {
-		upload.Snippet.Tags = strings.Split(*keywords, ",")
+	if strings.Trim(keywords, "") != "" {
+		upload.Snippet.Tags = strings.Split(keywords, ",")
 	}
 
 	call := service.Videos.Insert("snippet,status", upload)
 
-	file, err := os.Open(*filename)
+	file, err := os.Open(filename)
 	defer file.Close()
 	if err != nil {
-		log.Fatalf("Error opening %v: %v", *filename, err)
+		log.Fatalf("Error opening %v: %v", filename, err)
 	}
 
 	response, err := call.Media(file).Do()
