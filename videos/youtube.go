@@ -3,13 +3,22 @@ package videos
 import (
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
+	"runtime"
 	"strings"
+	"sync"
+	"time"
 
+	"github.com/cheggaaa/pb"
+	colorable "github.com/mattn/go-colorable"
+	isatty "github.com/mattn/go-isatty"
 	config "github.com/micro/go-config"
 	"github.com/rylio/ytdl"
 	"google.golang.org/api/youtube/v3"
+	//github.com/cavaliercoder/grab
 )
 
 type Channel struct {
@@ -36,7 +45,17 @@ var (
 
 // ReupYt function
 func ReupYt() {
+	maxProcs := runtime.NumCPU()
+	runtime.GOMAXPROCS(maxProcs)
+
+	wg := new(sync.WaitGroup)
 	var err error
+	var out io.Writer
+	var logOut io.Writer = os.Stdout
+	if runtime.GOOS == "windows" && isatty.IsTerminal(os.Stdout.Fd()) {
+		logOut = colorable.NewColorableStdout()
+	}
+
 	defer func() {
 		if err != nil {
 			fmt.Println(err.Error())
@@ -49,6 +68,7 @@ func ReupYt() {
 	config.Scan(&channels)
 	fmt.Println("Start download files!")
 	for _, channel := range channels.Channels {
+		wg.Add(1)
 		info, err := ytdl.GetVideoInfo(channel.Url)
 		if err != nil {
 			err = fmt.Errorf("Unable to fetch video info: %s", err.Error())
@@ -83,29 +103,56 @@ func ReupYt() {
 			return
 		}
 
-		fmt.Println("Downloading " + fileName + "...")
-		//go func() {
-		file, err := os.OpenFile(fileName, os.O_CREATE|os.O_WRONLY, 0666)
+		downloadURL, err := info.GetDownloadURL(formats[0])
 		if err != nil {
-			err = fmt.Errorf("Unable to open output file: %s", err.Error())
+			err = fmt.Errorf("Unable to get download url: %s", err.Error())
 			return
 		}
-		defer file.Close()
 
-		err = info.Download(formats[0], file)
-		if err != nil {
-			fmt.Println(err)
-		}
-		fmt.Println(fileName + " downloaded!")
-		//}()
+		fmt.Println("Downloading " + fileName + "...")
+		go func() {
+			file, err := os.OpenFile(fileName, os.O_CREATE|os.O_WRONLY, 0666)
+			if err != nil {
+				err = fmt.Errorf("Unable to open output file: %s", err.Error())
+				return
+			}
+			defer file.Close()
+			out = file
 
-		upload(fileName, channel.Title, channel.Desc, channel.Category, channel.Keywords, channel.Privacy)
+			var req *http.Request
+			req, err = http.NewRequest("GET", downloadURL.String(), nil)
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil || resp.StatusCode < 200 || resp.StatusCode >= 300 {
+				if err == nil {
+					err = fmt.Errorf("Received status code %d from download url", resp.StatusCode)
+				}
+				err = fmt.Errorf("Unable to start download: %s", err.Error())
+				return
+			}
+			defer resp.Body.Close()
+			contentSize := resp.ContentLength
+			progressBar := pb.New64(contentSize).SetUnits(pb.U_BYTES)
+			progressBar.ShowTimeLeft = true
+			progressBar.ShowSpeed = true
+			progressBar.SetWidth(75)
+			progressBar.Output = logOut
+			progressBar.Start()
+			defer progressBar.Finish()
+
+			out = io.MultiWriter(out, progressBar)
+
+			size, err := io.Copy(out, resp.Body)
+			if contentSize == size {
+				time.Sleep(5 * time.Second)
+				go upload(fileName, channel.Title, channel.Desc, channel.Category, channel.Keywords, channel.Privacy)
+			}
+			defer wg.Done()
+		}()
+		wg.Wait()
 	}
 }
 
 func upload(filename string, title string, desc string, category string, keywords string, privacy string) {
-	flag.Parse()
-
 	if filename == "" {
 		log.Fatalf("You must provide a filename of a video file to upload")
 	}
@@ -141,9 +188,11 @@ func upload(filename string, title string, desc string, category string, keyword
 
 	response, err := call.Media(file).Do()
 	handleError(err, "")
-	fmt.Printf("Upload successful! Video ID: %v\n", response.Id)
+	if err != nil {
+		fmt.Printf("Upload successful! Video ID: %v\n", response.Id)
+	}
 }
 
 func handleError(err error, msg string) {
-	fmt.Println(msg)
+	fmt.Println(err)
 }
