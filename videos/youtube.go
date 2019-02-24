@@ -62,7 +62,7 @@ func ReupYt() {
 	fmt.Println("=======================")
 	for _, video := range videos.Videos {
 		wg.Add(1)
-		go func(video Video) {
+		go func(video Video, wg *sync.WaitGroup) {
 			defer wg.Done()
 			videoInfo, err := ytdl.GetVideoInfo(video.URL)
 			if err != nil {
@@ -143,7 +143,7 @@ func ReupYt() {
 			if contentSize == size && err == nil {
 				go upload(uploadedFiles, fileName, video)
 			}
-		}(video)
+		}(video, wg)
 	}
 	wg.Wait()
 
