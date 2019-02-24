@@ -127,7 +127,7 @@ func openURL(url string) error {
 	case "linux":
 		err = exec.Command("xdg-open", url).Start()
 	case "windows":
-		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", "http://localhost:4001/").Start()
+		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
 	case "darwin":
 		err = exec.Command("open", url).Start()
 	default:
@@ -175,7 +175,7 @@ func getTokenFromWeb(config *oauth2.Config, authURL string) (*oauth2.Token, erro
 	} else {
 		fmt.Println("Your browser has been opened to an authorization URL.",
 			" This program will resume once authorization has been provided.\n")
-		fmt.Println(authURL)
+		//fmt.Println(authURL)
 	}
 
 	// Wait for the web server to get the code.

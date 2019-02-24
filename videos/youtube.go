@@ -1,7 +1,6 @@
 package videos
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -13,16 +12,15 @@ import (
 	"time"
 
 	"github.com/cheggaaa/pb"
-	colorable "github.com/mattn/go-colorable"
-	isatty "github.com/mattn/go-isatty"
 	config "github.com/micro/go-config"
 	"github.com/rylio/ytdl"
 	"google.golang.org/api/youtube/v3"
 	//github.com/cavaliercoder/grab
 )
 
-type Channel struct {
-	Url      string `json:"url"`
+// Video struct
+type Video struct {
+	URL      string `json:"url"`
 	Title    string `json:"title"`
 	Desc     string `json:"desc"`
 	Category string `json:"category"`
@@ -30,31 +28,27 @@ type Channel struct {
 	Privacy  string `json:"privacy"`
 }
 
-type Channels struct {
-	Channels []Channel `json:"channels"`
+// Videos struct
+type Videos struct {
+	Videos []Video `json:"videos"`
 }
-
-var (
-	filename    = flag.String("filename", "", "Name of video file to upload")
-	title       = flag.String("title", "Test Title", "Video title")
-	description = flag.String("description", "Test Description", "Video description")
-	category    = flag.String("category", "22", "Video category")
-	keywords    = flag.String("keywords", "", "Comma separated list of video keywords")
-	privacy     = flag.String("privacy", "unlisted", "Video privacy status")
-)
 
 // ReupYt function
 func ReupYt() {
+	config.LoadFile("config.json")
+	var videos Videos
+
+	config.Scan(&videos)
+	if len(videos.Videos) <= 0 {
+		fmt.Println("There are no videos to download and upload! Please make sure your configuration is correct!")
+		return
+	}
+
 	maxProcs := runtime.NumCPU()
 	runtime.GOMAXPROCS(maxProcs)
 
 	wg := new(sync.WaitGroup)
 	var err error
-	var out io.Writer
-	var logOut io.Writer = os.Stdout
-	if runtime.GOOS == "windows" && isatty.IsTerminal(os.Stdout.Fd()) {
-		logOut = colorable.NewColorableStdout()
-	}
 
 	defer func() {
 		if err != nil {
@@ -62,55 +56,58 @@ func ReupYt() {
 		}
 	}()
 
-	config.LoadFile("config.json")
-	var channels Channels
+	uploadedFiles := make(chan string, len(videos.Videos))
 
-	config.Scan(&channels)
-	fmt.Println("Start download files!")
-	for _, channel := range channels.Channels {
+	fmt.Println("Start download videos!")
+	fmt.Println("=======================")
+	for _, video := range videos.Videos {
 		wg.Add(1)
-		info, err := ytdl.GetVideoInfo(channel.Url)
-		if err != nil {
-			err = fmt.Errorf("Unable to fetch video info: %s", err.Error())
-			return
-		}
-
-		formats := info.Formats
-		filters := []string{
-			fmt.Sprintf("%s:mp4", ytdl.FormatExtensionKey),
-			fmt.Sprintf("!%s:", ytdl.FormatVideoEncodingKey),
-			fmt.Sprintf("!%s:", ytdl.FormatAudioEncodingKey),
-			fmt.Sprint("best"),
-		}
-
-		for _, filter := range filters {
-			filter, err := parseFilter(filter)
-			if err == nil {
-				formats = filter(formats)
+		go func(video Video) {
+			defer wg.Done()
+			videoInfo, err := ytdl.GetVideoInfo(video.URL)
+			if err != nil {
+				err = fmt.Errorf("Unable to fetch video info: %s", err.Error())
+				return
 			}
-		}
 
-		fileName, err := createFileName(channel.Title+"."+formats[0].Extension, outputFileName{
-			Title:         sanitizeFileNamePart(info.Title),
-			Ext:           sanitizeFileNamePart(formats[0].Extension),
-			DatePublished: sanitizeFileNamePart(info.DatePublished.Format("2006-01-02")),
-			Resolution:    sanitizeFileNamePart(formats[0].Resolution),
-			Author:        sanitizeFileNamePart(info.Author),
-			Duration:      sanitizeFileNamePart(info.Duration.String()),
-		})
-		if err != nil {
-			err = fmt.Errorf("Unable to parse output file file name: %s", err.Error())
-			return
-		}
+			formats := videoInfo.Formats
+			filters := []string{
+				fmt.Sprintf("%s:mp4", ytdl.FormatExtensionKey),
+				fmt.Sprintf("!%s:", ytdl.FormatVideoEncodingKey),
+				fmt.Sprintf("!%s:", ytdl.FormatAudioEncodingKey),
+				fmt.Sprint("best"),
+			}
 
-		downloadURL, err := info.GetDownloadURL(formats[0])
-		if err != nil {
-			err = fmt.Errorf("Unable to get download url: %s", err.Error())
-			return
-		}
+			for _, filter := range filters {
+				filter, err := parseFilter(filter)
+				if err == nil {
+					formats = filter(formats)
+				}
+			}
 
-		fmt.Println("Downloading " + fileName + "...")
-		go func() {
+			fileName, err := createFileName(time.Now().Format("20060102T150405.0700")+"."+formats[0].Extension, outputFileName{
+				Title:         sanitizeFileNamePart(videoInfo.Title),
+				Ext:           sanitizeFileNamePart(formats[0].Extension),
+				DatePublished: sanitizeFileNamePart(videoInfo.DatePublished.Format("2006-01-02")),
+				Resolution:    sanitizeFileNamePart(formats[0].Resolution),
+				Author:        sanitizeFileNamePart(videoInfo.Author),
+				Duration:      sanitizeFileNamePart(videoInfo.Duration.String()),
+			})
+			if err != nil {
+				err = fmt.Errorf("Unable to parse output file file name: %s", err.Error())
+				return
+			}
+
+			downloadURL, err := videoInfo.GetDownloadURL(formats[0])
+			if err != nil {
+				err = fmt.Errorf("Unable to get download url: %s", err.Error())
+				return
+			}
+
+			var out io.Writer
+			var logOut io.Writer = os.Stdout
+			fmt.Println("\nDownloading video [" + videoInfo.Title + "]...")
+
 			file, err := os.OpenFile(fileName, os.O_CREATE|os.O_WRONLY, 0666)
 			if err != nil {
 				err = fmt.Errorf("Unable to open output file: %s", err.Error())
@@ -140,23 +137,35 @@ func ReupYt() {
 			defer progressBar.Finish()
 
 			out = io.MultiWriter(out, progressBar)
-
 			size, err := io.Copy(out, resp.Body)
-			if contentSize == size {
-				time.Sleep(5 * time.Second)
-				go upload(fileName, channel.Title, channel.Desc, channel.Category, channel.Keywords, channel.Privacy)
+			time.Sleep(5 * time.Second)
+
+			if contentSize == size && err == nil {
+				go upload(uploadedFiles, fileName, video)
 			}
-			defer wg.Done()
-		}()
-		wg.Wait()
+		}(video)
 	}
+	wg.Wait()
+
+	for ulFilename := range uploadedFiles {
+		f := ulFilename
+		go func(fileName string) {
+			fmt.Println("Deleting uploaded video file: " + fileName + "...")
+			var err = os.Remove(fileName)
+			if err != nil {
+				return
+			}
+		}(f)
+	}
+
+	fmt.Println("Press ENTER to exit!")
+	fmt.Scanln()
 }
 
-func upload(filename string, title string, desc string, category string, keywords string, privacy string) {
+func upload(uploadedFiles chan string, filename string, video Video) {
 	if filename == "" {
 		log.Fatalf("You must provide a filename of a video file to upload")
 	}
-
 	client := getClient(youtube.YoutubeUploadScope)
 
 	service, err := youtube.New(client)
@@ -166,16 +175,16 @@ func upload(filename string, title string, desc string, category string, keyword
 
 	upload := &youtube.Video{
 		Snippet: &youtube.VideoSnippet{
-			Title:       title,
-			Description: desc,
-			CategoryId:  category,
+			Title:       video.Title,
+			Description: video.Desc,
+			CategoryId:  video.Category,
 		},
-		Status: &youtube.VideoStatus{PrivacyStatus: privacy},
+		Status: &youtube.VideoStatus{PrivacyStatus: video.Privacy},
 	}
 
 	// The API returns a 400 Bad Request response if tags is an empty string.
-	if strings.Trim(keywords, "") != "" {
-		upload.Snippet.Tags = strings.Split(keywords, ",")
+	if strings.Trim(video.Keywords, "") != "" {
+		upload.Snippet.Tags = strings.Split(video.Keywords, ",")
 	}
 
 	call := service.Videos.Insert("snippet,status", upload)
@@ -186,13 +195,13 @@ func upload(filename string, title string, desc string, category string, keyword
 		log.Fatalf("Error opening %v: %v", filename, err)
 	}
 
+	fmt.Println("\nUploading a video as name: [" + video.Title + "]...")
 	response, err := call.Media(file).Do()
-	handleError(err, "")
 	if err != nil {
-		fmt.Printf("Upload successful! Video ID: %v\n", response.Id)
+		fmt.Println(err)
+	} else {
+		time.Sleep(10 * time.Second)
+		fmt.Printf("\nUpload video name ["+video.Title+"] successful! Video ID: %v\n", response.Id)
+		uploadedFiles <- filename
 	}
-}
-
-func handleError(err error, msg string) {
-	fmt.Println(err)
 }
