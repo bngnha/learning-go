@@ -62,88 +62,7 @@ func ReupYt() {
 	fmt.Println("=======================")
 	for _, video := range videos.Videos {
 		wg.Add(1)
-		go func(video Video, wg *sync.WaitGroup) {
-			defer wg.Done()
-			videoInfo, err := ytdl.GetVideoInfo(video.URL)
-			if err != nil {
-				err = fmt.Errorf("Unable to fetch video info: %s", err.Error())
-				return
-			}
-
-			formats := videoInfo.Formats
-			filters := []string{
-				fmt.Sprintf("%s:mp4", ytdl.FormatExtensionKey),
-				fmt.Sprintf("!%s:", ytdl.FormatVideoEncodingKey),
-				fmt.Sprintf("!%s:", ytdl.FormatAudioEncodingKey),
-				fmt.Sprint("best"),
-			}
-
-			for _, filter := range filters {
-				filter, err := parseFilter(filter)
-				if err == nil {
-					formats = filter(formats)
-				}
-			}
-
-			fileName, err := createFileName(time.Now().Format("20060102T150405.0700")+"."+formats[0].Extension, outputFileName{
-				Title:         sanitizeFileNamePart(videoInfo.Title),
-				Ext:           sanitizeFileNamePart(formats[0].Extension),
-				DatePublished: sanitizeFileNamePart(videoInfo.DatePublished.Format("2006-01-02")),
-				Resolution:    sanitizeFileNamePart(formats[0].Resolution),
-				Author:        sanitizeFileNamePart(videoInfo.Author),
-				Duration:      sanitizeFileNamePart(videoInfo.Duration.String()),
-			})
-			if err != nil {
-				err = fmt.Errorf("Unable to parse output file file name: %s", err.Error())
-				return
-			}
-
-			downloadURL, err := videoInfo.GetDownloadURL(formats[0])
-			if err != nil {
-				err = fmt.Errorf("Unable to get download url: %s", err.Error())
-				return
-			}
-
-			var out io.Writer
-			var logOut io.Writer = os.Stdout
-			fmt.Println("\nDownloading video [" + videoInfo.Title + "]...")
-
-			file, err := os.OpenFile(fileName, os.O_CREATE|os.O_WRONLY, 0666)
-			if err != nil {
-				err = fmt.Errorf("Unable to open output file: %s", err.Error())
-				return
-			}
-			defer file.Close()
-			out = file
-
-			var req *http.Request
-			req, err = http.NewRequest("GET", downloadURL.String(), nil)
-			resp, err := http.DefaultClient.Do(req)
-			if err != nil || resp.StatusCode < 200 || resp.StatusCode >= 300 {
-				if err == nil {
-					err = fmt.Errorf("Received status code %d from download url", resp.StatusCode)
-				}
-				err = fmt.Errorf("Unable to start download: %s", err.Error())
-				return
-			}
-			defer resp.Body.Close()
-			contentSize := resp.ContentLength
-			progressBar := pb.New64(contentSize).SetUnits(pb.U_BYTES)
-			progressBar.ShowTimeLeft = true
-			progressBar.ShowSpeed = true
-			progressBar.SetWidth(75)
-			progressBar.Output = logOut
-			progressBar.Start()
-			defer progressBar.Finish()
-
-			out = io.MultiWriter(out, progressBar)
-			size, err := io.Copy(out, resp.Body)
-			time.Sleep(5 * time.Second)
-
-			if contentSize == size && err == nil {
-				go upload(uploadedFiles, fileName, video)
-			}
-		}(video, wg)
+		go dlYt(video, uploadedFiles, wg)
 	}
 	wg.Wait()
 
@@ -162,7 +81,90 @@ func ReupYt() {
 	fmt.Scanln()
 }
 
-func upload(uploadedFiles chan string, filename string, video Video) {
+func dlYt(video Video, uploadedFiles chan string, wg *sync.WaitGroup) {
+	defer wg.Done()
+	videoInfo, err := ytdl.GetVideoInfo(video.URL)
+	if err != nil {
+		err = fmt.Errorf("Unable to fetch video info: %s", err.Error())
+		return
+	}
+
+	formats := videoInfo.Formats
+	filters := []string{
+		fmt.Sprintf("%s:mp4", ytdl.FormatExtensionKey),
+		fmt.Sprintf("!%s:", ytdl.FormatVideoEncodingKey),
+		fmt.Sprintf("!%s:", ytdl.FormatAudioEncodingKey),
+		fmt.Sprint("best"),
+	}
+
+	for _, filter := range filters {
+		filter, err := parseFilter(filter)
+		if err == nil {
+			formats = filter(formats)
+		}
+	}
+
+	fileName, err := createFileName(time.Now().Format("20060102T150405.0700")+"."+formats[0].Extension, outputFileName{
+		Title:         sanitizeFileNamePart(videoInfo.Title),
+		Ext:           sanitizeFileNamePart(formats[0].Extension),
+		DatePublished: sanitizeFileNamePart(videoInfo.DatePublished.Format("2006-01-02")),
+		Resolution:    sanitizeFileNamePart(formats[0].Resolution),
+		Author:        sanitizeFileNamePart(videoInfo.Author),
+		Duration:      sanitizeFileNamePart(videoInfo.Duration.String()),
+	})
+	if err != nil {
+		err = fmt.Errorf("Unable to parse output file file name: %s", err.Error())
+		return
+	}
+
+	downloadURL, err := videoInfo.GetDownloadURL(formats[0])
+	if err != nil {
+		err = fmt.Errorf("Unable to get download url: %s", err.Error())
+		return
+	}
+
+	var out io.Writer
+	var logOut io.Writer = os.Stdout
+	fmt.Println("\nDownloading video [" + videoInfo.Title + "]...")
+
+	file, err := os.OpenFile(fileName, os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		err = fmt.Errorf("Unable to open output file: %s", err.Error())
+		return
+	}
+	defer file.Close()
+	out = file
+
+	var req *http.Request
+	req, err = http.NewRequest("GET", downloadURL.String(), nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil || resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		if err == nil {
+			err = fmt.Errorf("Received status code %d from download url", resp.StatusCode)
+		}
+		err = fmt.Errorf("Unable to start download: %s", err.Error())
+		return
+	}
+	defer resp.Body.Close()
+	contentSize := resp.ContentLength
+	progressBar := pb.New64(contentSize).SetUnits(pb.U_BYTES)
+	progressBar.ShowTimeLeft = true
+	progressBar.ShowSpeed = true
+	progressBar.SetWidth(75)
+	progressBar.Output = logOut
+	progressBar.Start()
+	defer progressBar.Finish()
+
+	out = io.MultiWriter(out, progressBar)
+	size, err := io.Copy(out, resp.Body)
+	time.Sleep(5 * time.Second)
+
+	if contentSize == size && err == nil {
+		go upload(fileName, video, uploadedFiles)
+	}
+}
+
+func upload(filename string, video Video, uploadedFiles chan string) {
 	if filename == "" {
 		log.Fatalf("You must provide a filename of a video file to upload")
 	}
