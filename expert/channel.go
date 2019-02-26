@@ -27,6 +27,8 @@ func PlayWithChannel() {
 		fmt.Println("Response from service 1:", res, time.Since(start))
 	case res := <-chan2:
 		fmt.Println("Respnse from service 2:", res, time.Since(start))
+	default:
+		fmt.Println("No response receive", time.Since(start))
 	}
 
 	fmt.Println("main() stopped!")

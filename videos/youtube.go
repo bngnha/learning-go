@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -33,6 +34,13 @@ type Videos struct {
 	Videos []Video `json:"videos"`
 }
 
+// VideoState struct
+type VideoState struct {
+	video    Video  `json:"video"`
+	fileName string `json:"file_name"`
+	status   string `json:"status"`
+}
+
 // ReupYt function
 func ReupYt() {
 	config.LoadFile("config.json")
@@ -56,32 +64,41 @@ func ReupYt() {
 		}
 	}()
 
-	uploadedFiles := make(chan string, len(videos.Videos))
+	videoStateChan := make(chan VideoState, len(videos.Videos))
+	filesChan := make(chan string, len(videos.Videos))
 
 	fmt.Println("Start download videos!")
 	fmt.Println("=======================")
 	for _, video := range videos.Videos {
 		wg.Add(1)
-		go dlYt(video, uploadedFiles, wg)
+		go dlYt(video, videoStateChan, wg)
 	}
 	wg.Wait()
 
-	for ulFilename := range uploadedFiles {
-		f := ulFilename
+	close(videoStateChan)
+	uWg = new(sync.WaitGroup)
+	for videoState := range videoStateChan {
+		uWg.Add(1)
+		go upload(videoState.fileName, videoState.video, filesChan, uWg)
+	}
+	uWg.Wait()
+
+	close(filesChan)
+	for file := range filesChan {
 		go func(fileName string) {
 			fmt.Println("Deleting uploaded video file: " + fileName + "...")
 			var err = os.Remove(fileName)
 			if err != nil {
 				return
 			}
-		}(f)
+		}(file)
 	}
 
 	fmt.Println("Press ENTER to exit!")
 	fmt.Scanln()
 }
 
-func dlYt(video Video, uploadedFiles chan string, wg *sync.WaitGroup) {
+func dlYt(video Video, videoStateChane chan<- VideoState, wg *sync.WaitGroup) {
 	defer wg.Done()
 	videoInfo, err := ytdl.GetVideoInfo(video.URL)
 	if err != nil {
@@ -104,7 +121,7 @@ func dlYt(video Video, uploadedFiles chan string, wg *sync.WaitGroup) {
 		}
 	}
 
-	fileName, err := createFileName(time.Now().Format("20060102T150405.0700")+"."+formats[0].Extension, outputFileName{
+	fileName, err := createFileName(strconv.FormatInt(time.Now().UnixNano(), 10)+"."+formats[0].Extension, outputFileName{
 		Title:         sanitizeFileNamePart(videoInfo.Title),
 		Ext:           sanitizeFileNamePart(formats[0].Extension),
 		DatePublished: sanitizeFileNamePart(videoInfo.DatePublished.Format("2006-01-02")),
@@ -160,11 +177,12 @@ func dlYt(video Video, uploadedFiles chan string, wg *sync.WaitGroup) {
 	time.Sleep(5 * time.Second)
 
 	if contentSize == size && err == nil {
-		go upload(fileName, video, uploadedFiles)
+		videoStateChane <- VideoState{video, fileName, "downloaded"}
 	}
 }
 
-func upload(filename string, video Video, uploadedFiles chan string) {
+func upload(filename string, video Video, filesChan chan string, wg *sync.WaitGroup) {
+	defer wg.Done()
 	if filename == "" {
 		log.Fatalf("You must provide a filename of a video file to upload")
 	}
@@ -204,6 +222,6 @@ func upload(filename string, video Video, uploadedFiles chan string) {
 	} else {
 		time.Sleep(10 * time.Second)
 		fmt.Printf("\nUpload video name ["+video.Title+"] successful! Video ID: %v\n", response.Id)
-		uploadedFiles <- filename
+		filesChan <- filename
 	}
 }
