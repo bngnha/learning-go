@@ -76,7 +76,7 @@ func ReupYt() {
 	wg.Wait()
 
 	close(videoStateChan)
-	uWg = new(sync.WaitGroup)
+	uWg := new(sync.WaitGroup)
 	for videoState := range videoStateChan {
 		uWg.Add(1)
 		go upload(videoState.fileName, videoState.video, filesChan, uWg)
