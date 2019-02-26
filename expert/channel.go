@@ -3,49 +3,66 @@ package expert
 import (
 	"fmt"
 	"sync"
+	"time"
 )
+
+var start time.Time
+
+func init() {
+	start = time.Now()
+}
 
 // PlayWithChannel function
 func PlayWithChannel() {
-	c := make(chan string, 1)
-	//c1 := make(chan string, 1)
-	c2 := make(chan string, 1)
-	//var c chan int
+	fmt.Println("[main] started", time.Since(start))
 
-	//fmt.Printf("type of `c` is %T\n", c)
-	//fmt.Printf("value of `c` is %v\n", c)
+	chan1 := make(chan string)
+	chan2 := make(chan string)
 
-	//for i := 0; i < 2; i++ {
-	go greet(c, c2)
-	//}
-	c <- "C"
-	//c1 <- "John"
-	//c1 <- "Mary"
+	go service1(chan1)
+	go service2(chan2)
 
-	//c2 <- "Test"
+	select {
+	case res := <-chan1:
+		fmt.Println("Response from service 1:", res, time.Since(start))
+	case res := <-chan2:
+		fmt.Println("Respnse from service 2:", res, time.Since(start))
+	}
 
-	//time.Sleep(time.Second * 1)
-	//fmt.Println("First Hello " + <-c)
 	fmt.Println("main() stopped!")
 }
 
-func greet(c1, c2 chan string) {
-	//for x := range c {
-	//	fmt.Println("c")
-	//	fmt.Println("Hello " + x + "!")
-	//}
-	//fmt.Println("d")
-	for {
-		select {
-		case x := <-c1:
-			fmt.Println(x)
-			//close(c)
-			//<-c
-		case y := <-c2:
-			fmt.Println(y)
-			//c2 <- y
-		}
-	}
+func service1(c chan string) {
+	time.Sleep(3 * time.Second)
+	c <- "Hello from service 1"
+}
+
+func service2(c chan string) {
+	time.Sleep(5 * time.Second)
+	c <- "Hello from service 2"
+}
+
+func square(c chan int) {
+	fmt.Println("[square] reading")
+
+	num := <-c
+	c <- num * num
+}
+
+func cube(c chan int) {
+	fmt.Println("[cube] reading")
+
+	num := <-c
+	c <- num * num * num
+}
+
+func greet(cc chan chan string) {
+	c := make(chan string)
+	cc <- c
+}
+
+func greeter(c chan string) {
+	fmt.Println("Hello ", <-c)
 }
 
 // ChannelFunc function
