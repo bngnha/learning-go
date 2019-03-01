@@ -7,6 +7,7 @@ import (
 )
 
 var start time.Time
+var i int
 
 func init() {
 	start = time.Now()
@@ -16,31 +17,31 @@ func init() {
 func PlayWithChannel() {
 	fmt.Println("[main] started", time.Since(start))
 
-	chan1 := make(chan string)
-	chan2 := make(chan string)
+	var wg sync.WaitGroup
 
-	go service1(chan1)
-	go service2(chan2)
-
-	select {
-	case res := <-chan1:
-		fmt.Println("Response from service 1:", res, time.Since(start))
-	case res := <-chan2:
-		fmt.Println("Respnse from service 2:", res, time.Since(start))
-	default:
-		fmt.Println("No response receive", time.Since(start))
+	for i := 0; i < 1000; i++ {
+		wg.Add(1)
+		go worker(&wg)
 	}
+	wg.Wait()
 
 	fmt.Println("main() stopped!")
 }
 
+func worker(wg *sync.WaitGroup) {
+	i++
+	wg.Done()
+}
+
 func service1(c chan string) {
-	time.Sleep(3 * time.Second)
+	//time.Sleep(3 * time.Second)
+	fmt.Println("Service 1 started")
 	c <- "Hello from service 1"
 }
 
 func service2(c chan string) {
-	time.Sleep(5 * time.Second)
+	//time.Sleep(5 * time.Second)
+	fmt.Println("Service 2 started")
 	c <- "Hello from service 2"
 }
 
