@@ -1,9 +1,9 @@
 package main
 
 import (
-	"github.com/bngnha/learn-golang/videos"
+	"github.com/bngnha/learn-golang/expert"
 )
 
 func main() {
-	videos.ReupYt()
+	expert.PlayWithChannel()
 }
