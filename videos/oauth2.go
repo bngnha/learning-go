@@ -112,7 +112,8 @@ func startWebServer() (codeCh chan string, err error) {
 		codeCh <- code // send code to OAuth flow
 		listener.Close()
 		w.Header().Set("Content-Type", "text/plain")
-		fmt.Fprintf(w, "Received code: %v\r\nYou can now safely close this browser window.", code)
+		//fmt.Fprintf(w, "Received code: %v\r\nYou can now safely close this browser window.", code)
+		fmt.Println("Authorizate successfully!")
 	}))
 
 	return codeCh, nil

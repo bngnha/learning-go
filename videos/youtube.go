@@ -3,13 +3,12 @@ package videos
 import (
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/cheggaaa/pb"
@@ -21,89 +20,72 @@ import (
 
 // Video struct
 type Video struct {
-	URL      string `json:"url"`
-	Title    string `json:"title"`
-	Desc     string `json:"desc"`
-	Category string `json:"category"`
-	Keywords string `json:"keywords"`
-	Privacy  string `json:"privacy"`
+	URL      string
+	Title    string
+	Desc     string
+	Category string
+	Keywords string
+	Privacy  string
 }
 
 // Videos struct
 type Videos struct {
-	Videos []Video `json:"videos"`
+	Videos []Video
 }
 
 // VideoState struct
 type VideoState struct {
-	video    Video  `json:"video"`
-	fileName string `json:"file_name"`
-	status   string `json:"status"`
+	video    Video
+	fileName string
+	status   string
 }
 
 // ReupYt function
 func ReupYt() {
-	config.LoadFile("config.json")
+	err := config.LoadFile("config.json")
+	if err != nil {
+		fmt.Printf("Load config file failure! %s", err.Error())
+		return
+	}
 	var videos Videos
 
 	config.Scan(&videos)
 	if len(videos.Videos) <= 0 {
 		fmt.Println("There are no videos to download and upload! Please make sure your configuration is correct!")
 		return
+	} else if len(videos.Videos) >= 5 {
+		fmt.Printf("Maximum videos downloaded and uploaded should be 5 at a time. Found %d videos!", len(videos.Videos))
+		return
 	}
 
 	maxProcs := runtime.NumCPU()
 	runtime.GOMAXPROCS(maxProcs)
 
-	wg := new(sync.WaitGroup)
-	var err error
-
-	defer func() {
-		if err != nil {
-			fmt.Println(err.Error())
-		}
-	}()
-
-	videoStateChan := make(chan VideoState, len(videos.Videos))
-	filesChan := make(chan string, len(videos.Videos))
-
-	fmt.Println("Start download videos!")
-	fmt.Println("=======================")
-	for _, video := range videos.Videos {
-		wg.Add(1)
-		go dlYt(video, videoStateChan, wg)
-	}
-	wg.Wait()
-
-	close(videoStateChan)
-	uWg := new(sync.WaitGroup)
-	for videoState := range videoStateChan {
-		uWg.Add(1)
-		go upload(videoState.fileName, videoState.video, filesChan, uWg)
-	}
-	uWg.Wait()
-
-	close(filesChan)
-	for file := range filesChan {
-		go func(fileName string) {
-			fmt.Println("Deleting uploaded video file: " + fileName + "...")
-			var err = os.Remove(fileName)
-			if err != nil {
-				return
-			}
-		}(file)
+	resources := make([]interface{}, len(videos.Videos))
+	for i, v := range videos.Videos {
+		resources[i] = v
 	}
 
-	fmt.Println("Press ENTER to exit!")
-	fmt.Scanln()
+	pool := NewPool(len(videos.Videos))
+
+	startTime := time.Now()
+	fmt.Println("Start processing...")
+	pool.start(resources, dlProcessor, ulProcessor)
+	fmt.Println("\nTotal time taken ", time.Since(startTime))
+
+	if pool.IsCompleted() {
+		fmt.Println("\nAll done!")
+		fmt.Println("Press ENTER to exit!")
+		fmt.Scanln()
+	}
 }
 
-func dlYt(video Video, videoStateChane chan<- VideoState, wg *sync.WaitGroup) {
-	defer wg.Done()
+func dlProcessor(resource interface{}) (interface{}, error) {
+	video := reflect.ValueOf(resource).Interface().(Video)
 	videoInfo, err := ytdl.GetVideoInfo(video.URL)
 	if err != nil {
 		err = fmt.Errorf("Unable to fetch video info: %s", err.Error())
-		return
+		return "", err
 	}
 
 	formats := videoInfo.Formats
@@ -121,7 +103,7 @@ func dlYt(video Video, videoStateChane chan<- VideoState, wg *sync.WaitGroup) {
 		}
 	}
 
-	fileName, err := createFileName(strconv.FormatInt(time.Now().UnixNano(), 10)+"."+formats[0].Extension, outputFileName{
+	fileName, err := createFileName(strconv.FormatInt(time.Now().UTC().UnixNano(), 10)+"."+formats[0].Extension, outputFileName{
 		Title:         sanitizeFileNamePart(videoInfo.Title),
 		Ext:           sanitizeFileNamePart(formats[0].Extension),
 		DatePublished: sanitizeFileNamePart(videoInfo.DatePublished.Format("2006-01-02")),
@@ -131,23 +113,23 @@ func dlYt(video Video, videoStateChane chan<- VideoState, wg *sync.WaitGroup) {
 	})
 	if err != nil {
 		err = fmt.Errorf("Unable to parse output file file name: %s", err.Error())
-		return
+		return "", err
 	}
 
 	downloadURL, err := videoInfo.GetDownloadURL(formats[0])
 	if err != nil {
 		err = fmt.Errorf("Unable to get download url: %s", err.Error())
-		return
+		return "", err
 	}
 
 	var out io.Writer
 	var logOut io.Writer = os.Stdout
-	fmt.Println("\nDownloading video [" + videoInfo.Title + "]...")
+	fmt.Println("\nDownload video [" + fileName + "] from [" + videoInfo.Title + "]")
 
 	file, err := os.OpenFile(fileName, os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		err = fmt.Errorf("Unable to open output file: %s", err.Error())
-		return
+		return "", err
 	}
 	defer file.Close()
 	out = file
@@ -160,37 +142,53 @@ func dlYt(video Video, videoStateChane chan<- VideoState, wg *sync.WaitGroup) {
 			err = fmt.Errorf("Received status code %d from download url", resp.StatusCode)
 		}
 		err = fmt.Errorf("Unable to start download: %s", err.Error())
-		return
+		return "", err
 	}
-	defer resp.Body.Close()
 	contentSize := resp.ContentLength
-	progressBar := pb.New64(contentSize).SetUnits(pb.U_BYTES)
-	progressBar.ShowTimeLeft = true
-	progressBar.ShowSpeed = true
-	progressBar.SetWidth(75)
-	progressBar.Output = logOut
-	progressBar.Start()
-	defer progressBar.Finish()
+	pb := pb.New64(contentSize).SetUnits(pb.U_BYTES)
+	pb.ShowTimeLeft = true
+	pb.ShowSpeed = true
+	pb.Prefix("Downloading... [" + fileName + "]:")
+	pb.Output = logOut
+	pb.Start()
+	defer pb.Finish()
+	defer resp.Body.Close()
 
-	out = io.MultiWriter(out, progressBar)
-	size, err := io.Copy(out, resp.Body)
-	time.Sleep(5 * time.Second)
-
-	if contentSize == size && err == nil {
-		videoStateChane <- VideoState{video, fileName, "downloaded"}
+	out = io.MultiWriter(out, pb)
+	_, err = io.Copy(out, resp.Body)
+	if err != nil {
+		return "", err
 	}
+
+	return fileName, err
 }
 
-func upload(filename string, video Video, filesChan chan string, wg *sync.WaitGroup) {
-	defer wg.Done()
-	if filename == "" {
-		log.Fatalf("You must provide a filename of a video file to upload")
+func ulProcessor(result Result) error {
+	result = reflect.ValueOf(result).Interface().(Result)
+	video := result.Job.resource.(Video)
+	fileName := result.Extra.(string)
+	if fileName == "" {
+		err := fmt.Errorf("You must provide a filename of a video file to upload")
+		return err
 	}
+
+	// delete the file after everything to be done
+	defer func(fileName string) {
+		var err = os.Remove(fileName)
+		if err != nil {
+			fmt.Printf("Unable to delete video file: %s, %s", fileName, err.Error())
+			return
+		} else {
+			fmt.Printf("Deleted video file [%s] successfully", fileName)
+		}
+	}(fileName)
+
 	client := getClient(youtube.YoutubeUploadScope)
 
 	service, err := youtube.New(client)
 	if err != nil {
-		log.Fatalf("Error creating YouTube client: %v", err)
+		err = fmt.Errorf("Error creating YouTube client: %s", err.Error())
+		return err
 	}
 
 	upload := &youtube.Video{
@@ -202,26 +200,47 @@ func upload(filename string, video Video, filesChan chan string, wg *sync.WaitGr
 		Status: &youtube.VideoStatus{PrivacyStatus: video.Privacy},
 	}
 
-	// The API returns a 400 Bad Request response if tags is an empty string.
 	if strings.Trim(video.Keywords, "") != "" {
 		upload.Snippet.Tags = strings.Split(video.Keywords, ",")
+	} else {
+		upload.Snippet.Tags = []string{video.Title}
 	}
 
 	call := service.Videos.Insert("snippet,status", upload)
 
-	file, err := os.Open(filename)
-	defer file.Close()
+	file, err := os.Open(fileName)
 	if err != nil {
-		log.Fatalf("Error opening %v: %v", filename, err)
+		err = fmt.Errorf("Error opening file: %s, %s", fileName, err.Error())
+		return err
 	}
+	fileStat, err := file.Stat()
+	if err != nil {
+		err = fmt.Errorf("Unable to ready file information %s, %s", fileName, err.Error())
+		return err
+	}
+	fmt.Printf("\nUpload video [%s] as name: [%s]\n", fileName, video.Title)
 
-	fmt.Println("\nUploading a video as name: [" + video.Title + "]...")
+	var logOut io.Writer = os.Stdout
+	pb := pb.New64(fileStat.Size()).SetUnits(pb.U_BYTES)
+	pb.ShowTimeLeft = true
+	pb.ShowSpeed = true
+	pb.Prefix("Uploading... [" + fileName + "]:")
+	pb.Output = logOut
+	pb.Start()
+	pb.SetTotal64(fileStat.Size() * 10 / 100) // Init at 10%
+	pb.Update()
+	defer pb.Finish()
+	defer file.Close()
+
 	response, err := call.Media(file).Do()
 	if err != nil {
-		fmt.Println(err)
-	} else {
-		time.Sleep(10 * time.Second)
-		fmt.Printf("\nUpload video name ["+video.Title+"] successful! Video ID: %v\n", response.Id)
-		filesChan <- filename
+		err = fmt.Errorf("Upload failure %s", err.Error())
+		return err
 	}
+
+	pb.SetTotal64(fileStat.Size())
+	pb.Update()
+	fmt.Printf("\nUpload video [%s] as name: [%s] successfully! Video ID: %v\n", fileName, video.Title, response.Id)
+
+	return err
 }
