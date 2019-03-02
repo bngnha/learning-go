@@ -57,6 +57,14 @@ func (p *Pool) allocate(jobs []interface{}) {
 	}
 }
 
+func (p *Pool) collect(proc ResultProcessorFunc) {
+	for result := range p.results {
+		proc(result)
+	}
+	p.done <- true
+	p.completed = true
+}
+
 func (p *Pool) work(wg *sync.WaitGroup, proc ResourceProcessorFunc) {
 	defer wg.Done()
 	for job := range p.jobs {
@@ -73,14 +81,6 @@ func (p *Pool) workerPool(proc ResourceProcessorFunc) {
 		go p.work(&wg, proc)
 	}
 	wg.Wait()
-}
-
-func (p *Pool) collect(proc ResultProcessorFunc) {
-	for result := range p.results {
-		proc(result)
-	}
-	p.done <- true
-	p.completed = true
 }
 
 // IsCompleted function
