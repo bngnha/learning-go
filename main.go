@@ -5,5 +5,7 @@ import (
 )
 
 func main() {
-	expert.PlayWithChannel()
+	//expert.PlayWithChannel()
+	//expert.PingPong()
+	expert.FanIn()
 }
